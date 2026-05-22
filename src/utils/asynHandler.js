@@ -3,7 +3,7 @@ import { json } from "express"
 
 //*Async functions me errors ko automatically handle karna.Taaki baar-baar try-catch na likhna pade.
 const asyncHandler = (requestHandler) => {
-    (req,res,next) => {
+  return  (req,res,next) => {
         Promise.resolve(requestHandler(req,res,next)).catch((err) => next(err))
     }
 }

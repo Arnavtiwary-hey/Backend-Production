@@ -7,7 +7,9 @@ import dotenv from "dotenv"; //!replace by this
 // import { DB_NAME } from "./constants";  // for connecting data base
 
 
-dotenv.config({})
+dotenv.config({
+    path:'./.env'
+})
 
 
 import connectDB from "./db/index.js";

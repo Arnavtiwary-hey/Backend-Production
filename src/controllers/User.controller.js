@@ -4,6 +4,24 @@ import { User} from "../models/user.model.js"
 import { uploadOnCloudinary } from "../utils/Cloudnary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+//todo //for genreatinng tokens
+const genrateAccessAndRefreshTokens = async(userId) => {
+  try {
+    const user = await User.findById(userId)
+
+    const accessToken = user.genrateAccessToken()
+    const refreshToken = user.genrateRefreshToken()
+ 
+    user.refreshToken = refreshToken
+    await user.save({validateBeforeSave:false})
+   
+    return {accessToken,refreshToken}
+
+  } catch (error) {
+    throw new ApiError(500,"Some thing went wrong while genreating  refresh and accces token")
+  }
+}
+
 
 const registerUser = asyncHandler( async (req,res) => {
 
@@ -37,7 +55,7 @@ const registerUser = asyncHandler( async (req,res) => {
    }
 
    // 3 step
-      const existedUser = User.findOne({
+      const existedUser = await User.findOne({
     $or:[{ username },{ email }]             //! check karne ke liye ki username exist karta hai  sath hi email bhi to iisko is tarh se karte hai
    })
    if(existedUser){
@@ -45,9 +63,15 @@ const registerUser = asyncHandler( async (req,res) => {
    }
 
    // 4th step
-   const avvatarLocalPath = req.files?.avatar[0]?.path;
-   const coverimageLocalPath = req.files?.coverimage[0]?.path;
-   if (!avvatarLocalPath) {
+   const avatarLocalPath = req.files?.avatar[0]?.path;
+   // const coverimageLocalPath = req.files?.coverimage[0]?.path;
+
+   let coverimageLocalPath;
+   if(Request.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
+    coverimageLocalPath = req.files.coverImage[0].
+    path
+   }
+   if (!avatarLocalPath) {
      throw new ApiError(400,"Avatar file is required")
    }
   //5th step
@@ -79,6 +103,87 @@ return res.status(201).json(
 
 })
 
+//! accccess token , refresh token and cookies vedio
 
+const loginUser  = asyncHandler(async(req,res) => {
+    //1st req body se data le aoo
+    //2nd username or email
+    //3rd  find the user
+    //4th find the user if valid or not
+    //5th password check karo
+    //6th access and refresh token genrate
+    //7th send these tokens into cookies
 
-export {registerUser}
+  //*1st
+    const {email,username,password} = req.body
+    if (!username || !email) {
+      throw new ApiError(400,"username or email is required")
+      }
+      //*2nd
+     const user = await User.findOne({
+      $or: [{username},{email}]
+    })  
+    //*3rd
+    if(!user){
+      throw new ApiError(404,"User does not exist")
+    }
+    //*4th
+    const isPasswordValid = await user.ispasswordCorrect(password)
+    if(!isPasswordValid){
+      throw new ApiError(401,"Invalid user credentials")
+    }
+    
+
+   const {accessToken,refreshToken} = await genrateAccessAndRefreshTokens(user._id)
+   const loggedInUser = await User.findById(user._id)
+   select("-password -refreshToken")
+
+    const options = {  //? ye true karne par sirf server se modify ho sakti hhai cookies frontend se ya koi or nahi kar sakta 
+      httpOnly :true,
+      secure:true
+  }
+
+  return res
+  .status(200)
+  .cookie("accessToken",accessToken,options)
+  .cookie("refreshToken",refreshToken,options)
+  .json(
+    new ApiResponse(
+      200,
+      {
+        user:loggedInUser,accessToken,refreshToken
+      },
+      "User Logged In Succsesfully"
+    )
+  )
+
+})
+//! for logout 
+const logoutUser = asyncHandler(async(req,res)=>{
+  await  User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set:{
+          refreshToken:undefined
+        }
+      },
+      {
+        new: true
+      }
+    )
+    const options = {  //? ye true karne par sirf server se modify ho sakti hhai cookies frontend se ya koi or nahi kar sakta 
+      httpOnly :true,
+      secure:true
+  }
+  return res.status(200)
+  .clearCookie("accessToken",option)
+  .clearCookie("refreshToken",option)
+  .json(new ApiResponse(200,{},"user logged Out Successfully"))
+})
+  
+
+export {
+  registerUser,
+  loginUser,
+  logoutUser
+}
